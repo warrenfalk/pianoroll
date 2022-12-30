@@ -117,20 +117,15 @@ function BackgroundGrid({keys, shift}: BackgroundGridProps) {
   )
 }
 
-type PastOverlayProps = {
-  width: number,
-  height: number,
-  y: number,
-}
-function PastOverlay({width, height, y}: PastOverlayProps) {
+function PastOverlay() {
   return (
     <g>
       <rect
         style={{fill: 'black', opacity: '0.1'}}
         x={0}
-        width={width}
-        y={y}
-        height={height}
+        y={0}
+        width={1}
+        height={1}
       />
     </g>
   )
@@ -172,7 +167,10 @@ export function PianoRoll({notes = [], keys = 88, lead = 10, past = 2, shift = -
         ref={gRef}>
         <NoteEvents notes={notes} />
       </g>
-      <PastOverlay width={keys} height={past} y={lead}/>
+      <g
+        transform={`translate(0, ${lead}) scale(${keys}, ${past})`}>
+        <PastOverlay />
+      </g>
     </svg>
   )
 }

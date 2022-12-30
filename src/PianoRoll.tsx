@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { subscribePlaybackTime } from "./playbackTime";
 
 //export function iter<T>(i: Iterable<T>): 
 
@@ -137,26 +138,20 @@ type PianoRollProps = {
   keys?: number,
   // shift by how many keys
   shift?: number,
-  // how many quarter notes of lead time to show
+  // how many seconds of the future to show
   lead?: number,
-  // how many quarter notes of the past to show
+  // how many seconds of the past to show
   past?: number,
 }
-export function PianoRoll({notes = [], keys = 88, lead = 10, past = 2, shift = -39}: PianoRollProps) {
+export function PianoRoll({notes = [], keys = 88, lead = 2.75, past = 0.75, shift = -39}: PianoRollProps) {
   const gRef = useRef<SVGGraphicsElement>(null);
   useEffect(() => {
-    function step(time: number) {
-      const t = time % 10000;
-      const y = t * 0.0023;
+    const unsub = subscribePlaybackTime(time => {
       const g = gRef.current;
       if (g)
-        g.style.transform = `translate(${-shift}px, ${0 + y}px)`;
-      const handle = window.requestAnimationFrame(step);
-      return () => {
-        window.cancelAnimationFrame(handle);
-      }
-    }
-    window.requestAnimationFrame(step);
+        g.style.transform = `translate(${-shift}px, ${time / 1000}px)`;
+    });
+    return unsub;
   }, [])
 
   return (

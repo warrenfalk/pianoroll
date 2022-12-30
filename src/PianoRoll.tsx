@@ -1,5 +1,4 @@
-
-// -39
+import { useEffect, useRef } from "react";
 
 //export function iter<T>(i: Iterable<T>): 
 
@@ -14,21 +13,20 @@ export function noteColor(note: number) {
   return ((n < 5 ? n : n + 1) % 2) ? "black" : "white";
 }
 
-type NoteEvent = {
+export type NoteEvent = {
   note: number,
   start: number,
   length: number,
   hand: 0 | 1,
 }
 
-type NotesProps = {
+type NoteEventsProps = {
   notes: readonly NoteEvent[],
 }
-function Notes({notes}: NotesProps) {
+function NoteEvents({notes}: NoteEventsProps) {
   return (
     <g
-      id="notes"
-      transform="translate(0, 9)">
+      id="notes">
       <defs>
         <linearGradient
           id="hand0">
@@ -65,7 +63,7 @@ function Notes({notes}: NotesProps) {
           //style="color:#000000;overflow:visible;fill:#0167f9;stroke-width:3.02362;stroke-linejoin:round"
           width="1"
           height={length}
-          x={note + 39}
+          x={note}
           y={-(start + length)}
           rx={0.3}
           ry={0.09}
@@ -75,7 +73,13 @@ function Notes({notes}: NotesProps) {
   )
 }
 
-function BackgroundGrid() {
+type BackgroundGridProps = {
+  // how many piano keys to show
+  keys: number,
+  // shift by how many keys
+  shift: number,
+}
+function BackgroundGrid({keys, shift}: BackgroundGridProps) {
   return (
     <g id="grid">
       <defs>
@@ -98,14 +102,14 @@ function BackgroundGrid() {
             offset="1" />
         </linearGradient>
       </defs>
-      {[...range(-39, 88)].map(n => (
+      {[...range(shift, keys)].map(n => (
         <rect
           key={n}
           style={{fill: noteColor(n) === "white" ? "url(#white)" : "url(#black)"}}
           //style="color:#000000;overflow:visible;fill:#0167f9;stroke-width:3.02362;stroke-linejoin:round"
           width="1"
           height="100%"
-          x={n + 39}
+          x={n - shift}
           y={0}
         />
       ))}
@@ -113,24 +117,62 @@ function BackgroundGrid() {
   )
 }
 
-export function PianoRoll() {
-  const notes: NoteEvent[] = [
-    {start: 0.00, length: 1.00, note:   0, hand: 0},
-    {start: 1.00, length: 1.00, note:   2, hand: 0},
-    {start: 2.00, length: 1.00, note:   4, hand: 0},
-    {start: 3.00, length: 1.00, note:   5, hand: 0},
-    {start: 4.00, length: 0.35, note:   2, hand: 0},
-    {start: 4.00, length: 4.00, note: -14, hand: 1},
-    {start: 4.00, length: 4.00, note: -26, hand: 1},
-    {start: 4.25, length: 1.75, note:   4, hand: 0},
-    {start: 6.00, length: 0.50, note:   5, hand: 0},
-    {start: 6.50, length: 0.50, note:   4, hand: 0},
-    {start: 7.00, length: 1.00, note:   2, hand: 0},
-  ];
+type PastOverlayProps = {
+  width: number,
+  height: number,
+  y: number,
+}
+function PastOverlay({width, height, y}: PastOverlayProps) {
   return (
-    <svg style={{flexGrow: 1}} viewBox="0 0 88 12" preserveAspectRatio="none">
-      <BackgroundGrid />
-      <Notes notes={notes} />
+    <g>
+      <rect
+        style={{fill: 'black', opacity: '0.1'}}
+        x={0}
+        width={width}
+        y={y}
+        height={height}
+      />
+    </g>
+  )
+}
+
+type PianoRollProps = {
+  notes?: readonly NoteEvent[],
+  // how many piano keys to show
+  keys?: number,
+  // shift by how many keys
+  shift?: number,
+  // how many quarter notes of lead time to show
+  lead?: number,
+  // how many quarter notes of the past to show
+  past?: number,
+}
+export function PianoRoll({notes = [], keys = 88, lead = 10, past = 2, shift = -39}: PianoRollProps) {
+  const gRef = useRef<SVGGraphicsElement>(null);
+  useEffect(() => {
+    function step(time: number) {
+      const t = time % 10000;
+      const y = t * 0.0023;
+      const g = gRef.current;
+      if (g)
+        g.style.transform = `translate(${-shift}px, ${0 + y}px)`;
+      const handle = window.requestAnimationFrame(step);
+      return () => {
+        window.cancelAnimationFrame(handle);
+      }
+    }
+    window.requestAnimationFrame(step);
+  }, [])
+
+  return (
+    <svg style={{flexGrow: 1}} viewBox={`0 0 ${keys} ${(lead + past)}`} preserveAspectRatio="none">
+      <BackgroundGrid keys={keys} shift={shift} />
+      <g
+        id="time"
+        ref={gRef}>
+        <NoteEvents notes={notes} />
+      </g>
+      <PastOverlay width={keys} height={past} y={lead}/>
     </svg>
   )
 }

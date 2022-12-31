@@ -1,4 +1,4 @@
-import { usePlaybackTime } from "./playbackTime";
+import { controlPlayback, usePlaybackTime } from "./playbackState";
 
 type TimeDisplayProps = {
   tempo: number,
@@ -10,7 +10,7 @@ export function Controls({tempo}: TimeDisplayProps) {
   return (
     <div
       style={{
-        width: 200,
+        width: 280,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'end',
@@ -19,13 +19,31 @@ export function Controls({tempo}: TimeDisplayProps) {
         backgroundColor: 'white',
       }}>
       <div
-        className="play"
+        className="buttons"
         style={{
           flexGrow: 0,
           flexShrink: 0,
-          flexBasis: 60,
+          flexBasis: 120,
+          display: 'flex',
         }}>
-        <button>⏯</button>
+        <button
+          onClick={() => {
+            controlPlayback({event: "reset"})
+          }}>
+          {'⇤'}
+        </button>
+        <button
+          onClick={() => {
+            controlPlayback({event: "toggle"})
+          }}>
+          {'⏯'}
+        </button>
+        <button
+          onClick={() => {
+            
+          }}>
+          {'🕪'}
+        </button>
       </div>
       <div
         className="time"
@@ -35,7 +53,7 @@ export function Controls({tempo}: TimeDisplayProps) {
           flexBasis: 100,
           textAlign: 'right',
         }}>
-          {Math.round(timeBeats * 10) / 10}
+          {Math.floor(timeBeats)}.{Math.floor((timeBeats % 1) * 10)}
       </div>
     </div>
   )

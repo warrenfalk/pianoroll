@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "assert-never": "^1.2.1",
     "midi-file": "^1.2.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

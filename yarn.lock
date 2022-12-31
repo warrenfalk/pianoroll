@@ -638,6 +638,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"assert-never@npm:^1.2.1":
+  version: 1.2.1
+  resolution: "assert-never@npm:1.2.1"
+  checksum: ea4f1756d90f55254c4dc7a20d6c5d5bc169160562aefe3d8756b598c10e695daf568f21b6d6b12245d7f3782d3ff83ef6a01ab75d487adfc6909470a813bf8c
+  languageName: node
+  linkType: hard
+
 "balanced-match@npm:^1.0.0":
   version: 1.0.2
   resolution: "balanced-match@npm:1.0.2"
@@ -1520,6 +1527,7 @@ __metadata:
     "@types/react-dom": ^18.0.9
     "@vitejs/plugin-basic-ssl": ^1.0.1
     "@vitejs/plugin-react": ^3.0.0
+    assert-never: ^1.2.1
     midi-file: ^1.2.3
     react: ^18.2.0
     react-dom: ^18.2.0

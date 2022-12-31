@@ -1,30 +1,21 @@
-import { useEffect, useRef } from "react";
-import { subscribePlaybackTime } from "./playbackTime";
-
-//export function iter<T>(i: Iterable<T>): 
-
-export function* range(start: number, length: number) {
-  for (let i = 0; i < length; i++) {
-    yield start + i;
-  }
-}
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useDimensions } from "./dimensions";
+import { range } from "./iterables";
+import { NoteOnInfo } from "./midi";
+import { subscribePlaybackTime } from "./playbackState";
+import { NoteEvent } from "./timelineData";
 
 export function noteColor(note: number) {
   const n = ((note % 12) + 12) % 12;
   return ((n < 5 ? n : n + 1) % 2) ? "black" : "white";
 }
 
-export type NoteEvent = {
-  note: number,
-  start: number,
-  length: number,
-  hand: 0 | 1,
-}
-
 type NoteEventsProps = {
   notes: readonly NoteEvent[],
+  // adjustment for a y coordinate to make 1:1 aspect with x coordinate space
+  ar: number,
 }
-function NoteEvents({notes}: NoteEventsProps) {
+function NoteEvents({notes, ar}: NoteEventsProps) {
   return (
     <g
       id="notes">
@@ -57,17 +48,17 @@ function NoteEvents({notes}: NoteEventsProps) {
             offset="1" />
         </linearGradient>
       </defs>
-      {notes.map(({note, length, start, hand}) => (
+      {notes.map(({note, lengthMs, startMs, hand}) => (
         <rect
-          key={`${start}-${note}`}
-          style={{fill: `url(#hand${hand})`}}
+          key={`${startMs}-${note}`}
+          style={{fill: `url(#hand${hand})`, stroke: 'black', strokeWidth: '1', vectorEffect: 'non-scaling-stroke'}}
           //style="color:#000000;overflow:visible;fill:#0167f9;stroke-width:3.02362;stroke-linejoin:round"
           width="1"
-          height={length}
+          height={lengthMs}
           x={note}
-          y={-(start + length)}
+          y={-(startMs + lengthMs)}
           rx={0.3}
-          ry={0.03}
+          ry={0.3 * ar}
         />
       ))}
     </g>
@@ -132,8 +123,28 @@ function PastOverlay() {
   )
 }
 
+type NotesOnProps = {
+  notesOn: readonly NoteOnInfo[];
+}
+function NotesOn({notesOn}: NotesOnProps) {
+  return (
+    <g>
+      {notesOn.map(({note}) => (
+        <rect
+          style={{fill: 'blue', opacity: '0.5'}}
+          x={note}
+          y={-0.5}
+          width={1}
+          height={1}
+        />
+      ))}
+    </g>
+  )
+}
+
 type PianoRollProps = {
-  notes?: readonly NoteEvent[],
+  timeline?: readonly NoteEvent[],
+  notesOn?: readonly NoteOnInfo[],
   // how many piano keys to show
   keys?: number,
   // shift by how many keys
@@ -143,7 +154,9 @@ type PianoRollProps = {
   // how many seconds of the past to show
   past?: number,
 }
-export function PianoRoll({notes = [], keys = 88, lead = 2.75, past = 0.75, shift = -39}: PianoRollProps) {
+export function PianoRoll({timeline = [], notesOn = [], keys = 88, lead = 2.75, past = 0.75, shift = -39}: PianoRollProps) {
+  const [dimensions, svgRef] = useDimensions<SVGSVGElement>()
+  const ar = (dimensions ? (dimensions.width / dimensions.height) : 1) * (lead + past) / keys;
   const gRef = useRef<SVGGraphicsElement>(null);
   useEffect(() => {
     const unsub = subscribePlaybackTime(time => {
@@ -155,16 +168,19 @@ export function PianoRoll({notes = [], keys = 88, lead = 2.75, past = 0.75, shif
   }, [])
 
   return (
-    <svg style={{flexGrow: 1}} viewBox={`0 0 ${keys} ${(lead + past)}`} preserveAspectRatio="none">
+    <svg ref={svgRef} style={{flexGrow: 1, flexShrink: 1}} viewBox={`0 0 ${keys} ${lead + past}`} preserveAspectRatio="none">
       <BackgroundGrid keys={keys} shift={shift} />
       <g
         id="time"
         ref={gRef}>
-        <NoteEvents notes={notes} />
+        <NoteEvents notes={timeline} ar={ar} />
       </g>
       <g
         transform={`translate(0, ${lead}) scale(${keys}, ${past})`}>
         <PastOverlay />
+      </g>
+      <g transform={`translate(${-shift}, ${lead}) scale(1, ${ar})`}>
+        <NotesOn notesOn={notesOn} />
       </g>
     </svg>
   )

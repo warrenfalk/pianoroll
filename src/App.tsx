@@ -1,7 +1,59 @@
-import { useEffect, useState } from 'react';
 import './App.css'
 import {NoteEvent, PianoRoll} from './PianoRoll';
-import { TimeDisplay } from './TimeDisplay';
+import { Controls } from './Controls';
+import * as midiManager from 'midi-file';
+import { useState } from 'react';
+import { midi } from './midi';
+
+
+
+async function fileToNotes(file: File): Promise<readonly NoteEvent[]> {
+  type NoteStartInfo = {
+    start: number,
+    velocity: number,
+  }
+  const data = await file.arrayBuffer();
+  const array = new Uint8Array(data);
+  const parsed = midiManager.parseMidi(array);
+  if (parsed.tracks.length < 1) {
+    throw new Error("No tracks");
+  }
+  const track = parsed.tracks[0];
+  const output: NoteEvent[] = [];
+  let now = 0;
+  const notesOn = new Map<string, NoteStartInfo>();
+  // to process a list of midi events, you have to loop through it and keep track of certain state
+  for (const event of track) {
+    now += event.deltaTime;
+    switch (event.type) {
+      case "noteOn": {
+        const {noteNumber, channel, velocity} = event;
+        const id = `${channel}.${noteNumber}`;
+        notesOn.set(id, {start: now, velocity});
+        break;
+      }
+      case "noteOff": {
+        const {noteNumber, channel} = event;
+        const id = `${channel}.${noteNumber}`;
+        const note = notesOn.get(id);
+        // 19200 per quarter note = 1 beat 120 beats per minute 1/120 minutes per beat = 0.5 seconds per beat per 19200 units per beat 
+        // 38400 per second
+        if (note) {
+          output.push({
+            start: note.start / 38400,
+            length: (now - note.start) / 38400,
+            hand: 0,
+            note: noteNumber - 60,
+          });
+          notesOn.delete(id);
+        }
+        break;
+      }
+    }
+  }
+  console.log(parsed.tracks[0]);
+  return output;
+}
 
 const tempo = 144;
 const meter = 3; // beats per measure
@@ -33,12 +85,37 @@ function toAbsolute(notes: NoteEvent[]): readonly NoteEvent[] {
 const notes2 = toAbsolute(notes);
 
 function App() {
+  const [notes, setNotes] = useState<readonly NoteEvent[]>(notes2);
+
   return (
-    <div className="App" style={{display: 'flex', flexDirection: 'column', flexGrow: 1, placeItems: 'stretch'}}>
+    <div
+      className="App"
+      style={{display: 'flex', flexDirection: 'column', flexGrow: 1, placeItems: 'stretch'}}
+      onClick={() => {
+        midi().then(() => {}).catch(e => console.error(e));
+      }}
+      onDrop={(e) => {
+        if (e.dataTransfer.items.length > 0 && e.dataTransfer.items[0].type === 'audio/midi') {
+          const file = e.dataTransfer.items[0].getAsFile();
+          if (file === null) {
+            console.error("No file");
+            return;
+          }
+          fileToNotes(file)
+            .then(notes => setNotes(notes))
+            .catch(e => console.error(e));
+          
+          console.log(file);
+        }
+        e.preventDefault();
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+      }}>
       <div style={{position: 'absolute'}}>
-        <TimeDisplay tempo={tempo} />
+        <Controls tempo={tempo} />
       </div>
-      <PianoRoll notes={notes2} keys={60} shift={-30} />
+      <PianoRoll notes={notes} keys={88} shift={-39} />
     </div>
   )
 }

@@ -67,7 +67,7 @@ function NoteEvents({notes}: NoteEventsProps) {
           x={note}
           y={-(start + length)}
           rx={0.3}
-          ry={0.09}
+          ry={0.03}
         />
       ))}
     </g>

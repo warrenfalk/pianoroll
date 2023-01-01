@@ -13,7 +13,7 @@ const g = (window as any);
 g.midiPlayback = import.meta;
 
 function startPlayback(lookaheadMs: number = 500): PlaybackInstance {
-  let queued: DOMHighResTimeStamp | false = false;
+  let prev: DOMHighResTimeStamp | false = false;
   let time: DOMHighResTimeStamp = 0;
   let playing: boolean = false;
   let timeline: readonly NoteEvent[] = [];
@@ -56,23 +56,38 @@ function startPlayback(lookaheadMs: number = 500): PlaybackInstance {
       return;
     }
     const now = performance.now();
+    const windowMin = time;
+    const windowMax = time + lookaheadMs;
     const toPlay = timeline
-      .filter(n => ((n.startMs >= time) && (n.startMs < (time + lookaheadMs)) && (queued === false || n.startMs >= queued)))
+      .filter(n => (
+        (  (n.startMs >= windowMin && n.startMs < windowMax) // note starts within this time window
+        || (prev === false && n.startMs < windowMin && (n.startMs + n.lengthMs) > windowMin) // or starts before it and ends after it and this is the first iteration
+        ) 
+        && (prev === false || n.startMs >= prev) // and we haven't already enqueued it
+      ))
       .map(n => ({
         note: n.note + 60,
         start: (n.startMs - time) + now,
         length: n.lengthMs,
         velocity: n.velocity
       }));
-    if (queued === 0) {
+    if (prev === 0) {
       console.log(timeline.slice(0, 5));
     }
-    console.log("queue", toPlay, time, queued);
+    console.log("queue", toPlay, time, prev);
     playMidi(midi, toPlay);
-    queued = time + lookaheadMs;
+    prev = time + lookaheadMs;
   }
 
   function stop() {
+    // TODO: figure out how to stop any notes that we've started
+    //       This is tricky because we'll have queued both start and stop events
+    //       We could just queue an immediate stop event for all notes we might have started
+    //       But in fact if the start event is still in the future at this time, it will still play
+    dispose();
+  }
+
+  function dispose() {
     dispose2();
     dispose1();
     dispose0();

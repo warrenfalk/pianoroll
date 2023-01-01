@@ -53,10 +53,10 @@ export function subscribePlaybackTime(callback: PlaybackTimeCallback, resolution
   }
 }
 
-export function usePlaybackTime(resolution: number = 50) {
+export function usePlaybackTime(resolutionMs: number = 50) {
   const [time, setTime] = useState<number>(playbackTime);
   useEffect(() => {
-    const unsub = subscribePlaybackTime((now) => {setTime(now)}, resolution);
+    const unsub = subscribePlaybackTime((now) => {setTime(now)}, resolutionMs);
     return unsub;
   }, []);
   return time;

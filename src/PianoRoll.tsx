@@ -2,12 +2,24 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useDimensions } from "./dimensions";
 import { range } from "./iterables";
 import { NoteOnInfo } from "./midi";
-import { subscribePlaybackTime } from "./playbackState";
+import { subscribePlaybackTime, usePlaybackTime } from "./playbackState";
 import { NoteEvent } from "./timelineData";
 
+
+export function noteNum(note: number) {
+  return ((note % 12) + 12) % 12
+}
+
 export function noteColor(note: number) {
-  const n = ((note % 12) + 12) % 12;
+  const n = noteNum(note);
   return ((n < 5 ? n : n + 1) % 2) ? "black" : "white";
+}
+
+const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as readonly string[];
+
+export function noteName(note: number) {
+  const n = noteNum(note);
+  return noteNames[n];
 }
 
 type NoteEventsProps = {
@@ -47,19 +59,37 @@ function NoteEvents({notes, ar}: NoteEventsProps) {
             style={{stopColor:'#9000FF',stopOpacity:0.7}}
             offset="1" />
         </linearGradient>
+        {[...range(0, 12)].map(n => (
+          <text
+            id={`note${n}`}
+            style={{
+              fill: 'white',
+              fontSize: 0.60,
+              textAnchor: 'middle',
+            }}
+            x={0}
+            y={0}>
+            {noteName(n)}
+          </text>
+        ))}
+
+
       </defs>
       {notes.map(({note, lengthMs, startMs, hand}) => (
-        <rect
-          key={`${startMs}-${note}`}
-          style={{fill: `url(#hand${hand})`, stroke: 'black', strokeWidth: '1', vectorEffect: 'non-scaling-stroke'}}
-          //style="color:#000000;overflow:visible;fill:#0167f9;stroke-width:3.02362;stroke-linejoin:round"
-          width="1"
-          height={lengthMs}
-          x={note}
-          y={-(startMs + lengthMs)}
-          rx={0.3}
-          ry={0.3 * ar}
-        />
+        <>
+          <rect
+            key={`${startMs}-${note}`}
+            style={{fill: `url(#hand${hand})`, stroke: 'black', strokeWidth: '1', vectorEffect: 'non-scaling-stroke'}}
+            //style="color:#000000;overflow:visible;fill:#0167f9;stroke-width:3.02362;stroke-linejoin:round"
+            width="1"
+            height={lengthMs * 0.001}
+            x={note}
+            y={-((startMs + lengthMs) * 0.001)}
+            rx={0.3}
+            ry={0.3 * ar}
+          />
+          <use href={`#note${noteNum(note)}`} transform={`translate(${note + 0.5}, ${-(startMs * 0.001) - (0.3 * ar)}) scale(1, ${ar})`} />
+        </>
       ))}
     </g>
   )
@@ -93,17 +123,24 @@ function BackgroundGrid({keys, shift}: BackgroundGridProps) {
             style={{stopColor:'#ffffff',stopOpacity:1}}
             offset="1" />
         </linearGradient>
-      </defs>
-      {[...range(shift, keys)].map(n => (
         <rect
-          key={n}
-          style={{fill: noteColor(n) === "white" ? "url(#white)" : "url(#black)"}}
+          id="rect-black"
+          style={{fill: "url(#black)"}}
           //style="color:#000000;overflow:visible;fill:#0167f9;stroke-width:3.02362;stroke-linejoin:round"
           width="1"
           height="100%"
-          x={n - shift}
           y={0}
         />
+        <rect
+          id="rect-white"
+          style={{fill: 'url(#white)'}}
+          width="1"
+          height="100%"
+          y={0}
+        />
+      </defs>
+      {[...range(shift, keys)].map(n => (
+        <use key={n} href={`#rect-${noteColor(n)}`} x={n - shift} />
       ))}
     </g>
   )
@@ -142,6 +179,10 @@ function NotesOn({notesOn}: NotesOnProps) {
   )
 }
 
+function filterVisible(timeline: readonly NoteEvent[], earliestMs: number, latestMs: number): readonly NoteEvent[] {
+  return timeline.filter(e => !(e.startMs > earliestMs || (e.startMs + e.lengthMs) < latestMs));
+}
+
 type PianoRollProps = {
   timeline?: readonly NoteEvent[],
   notesOn?: readonly NoteOnInfo[],
@@ -149,14 +190,25 @@ type PianoRollProps = {
   keys?: number,
   // shift by how many keys
   shift?: number,
-  // how many seconds of the future to show
-  lead?: number,
-  // how many seconds of the past to show
-  past?: number,
+  // how many miliseconds of the future to show
+  leadMs?: number,
+  // how many miliseconds of the past to show
+  pastMs?: number,
 }
-export function PianoRoll({timeline = [], notesOn = [], keys = 88, lead = 2.75, past = 0.75, shift = -39}: PianoRollProps) {
+export function PianoRoll({timeline = [], notesOn = [], keys = 88, leadMs = 2750, pastMs = 750, shift = -39}: PianoRollProps) {
   const [dimensions, svgRef] = useDimensions<SVGSVGElement>()
-  const ar = (dimensions ? (dimensions.width / dimensions.height) : 1) * (lead + past) / keys;
+  const time = usePlaybackTime(2000);
+
+  // Filter only the visible notes for performance
+  // this is the latest edge
+  const bottomEdgeMs = time - (leadMs + pastMs);
+  // this is the earliest edge (padded by 2 seconds)
+  const topEdgeMs = time + 2000;
+  const visible = filterVisible(timeline, topEdgeMs, bottomEdgeMs);
+
+  const heightMs = (leadMs + pastMs);
+  const heightSeconds = heightMs * 0.001;
+  const ar = (dimensions ? (dimensions.width / dimensions.height) : 1) * heightSeconds / keys;
   const gRef = useRef<SVGGraphicsElement>(null);
   useEffect(() => {
     const unsub = subscribePlaybackTime(time => {
@@ -168,18 +220,18 @@ export function PianoRoll({timeline = [], notesOn = [], keys = 88, lead = 2.75, 
   }, [])
 
   return (
-    <svg ref={svgRef} style={{flexGrow: 1, flexShrink: 1}} viewBox={`0 0 ${keys} ${lead + past}`} preserveAspectRatio="none">
+    <svg ref={svgRef} style={{flexGrow: 1, flexShrink: 1}} viewBox={`0 0 ${keys} ${heightSeconds}`} preserveAspectRatio="none">
       <BackgroundGrid keys={keys} shift={shift} />
       <g
         id="time"
         ref={gRef}>
-        <NoteEvents notes={timeline} ar={ar} />
+        <NoteEvents notes={visible} ar={ar} />
       </g>
       <g
-        transform={`translate(0, ${lead}) scale(${keys}, ${past})`}>
+        transform={`translate(0, ${leadMs * 0.001}) scale(${keys}, ${pastMs * 0.001})`}>
         <PastOverlay />
       </g>
-      <g transform={`translate(${-shift}, ${lead}) scale(1, ${ar})`}>
+      <g transform={`translate(${-shift}, ${leadMs * 0.001}) scale(1, ${ar})`}>
         <NotesOn notesOn={notesOn} />
       </g>
     </svg>

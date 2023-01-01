@@ -41,7 +41,7 @@ function App() {
         <Controls tempo={tempo} />
         <pre>{JSON.stringify(notesOn)}</pre>
       </div>
-      <PianoRoll notesOn={notesOn} timeline={notes} keys={88} shift={-39} lead={6} past={1.5} />
+      <PianoRoll notesOn={notesOn} timeline={notes} keys={88} shift={-39} leadMs={6000} pastMs={1500} />
     </div>
   )
 }

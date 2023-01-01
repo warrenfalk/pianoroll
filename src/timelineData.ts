@@ -47,8 +47,8 @@ export async function fileToNotes(file: File): Promise<readonly NoteEvent[]> {
         // 38400 per second
         if (note) {
           output.push({
-            startMs: note.start / 38400,
-            lengthMs: (now - note.start) / 38400,
+            startMs: note.start / 38.4,
+            lengthMs: (now - note.start) / 38.4,
             hand: 0,
             note: noteNumber - 60,
             velocity: note.velocity,

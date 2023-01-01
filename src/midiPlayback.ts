@@ -1,5 +1,5 @@
 import { openFirstOutput, playMidi } from "./midi";
-import { createObservable } from "./observable";
+import { createObservable, makeUseOf } from "./observable";
 import { observePlaybackState, observePlaybackTime } from "./playbackState";
 import { NoteEvent, observeTimelineEvents } from "./timelineData";
 
@@ -7,7 +7,7 @@ type PlaybackInstance = {
   stop: () => void,
 }
 
-let playback: PlaybackInstance | undefined = undefined;
+const instance = createObservable<PlaybackInstance | undefined>(undefined);
 
 const g = (window as any);
 g.midiPlayback = import.meta;
@@ -98,14 +98,16 @@ function startPlayback(lookaheadMs: number = 500): PlaybackInstance {
   }
 }
 
+
 export function enableMidiOut() {
-  if (playback === undefined) {
-    playback = startPlayback();
+  if (instance.get() === undefined) {
+    const playback = startPlayback();
+    instance.set(playback);
   }
 }
 
 export function toggleMidiOut() {
-  if (playback === undefined) {
+  if (instance.get() === undefined) {
     enableMidiOut();
   }
   else {
@@ -114,8 +116,11 @@ export function toggleMidiOut() {
 }
 
 export function disableMidiOut() {
+  const playback = instance.get();
   if (playback !== undefined) {
     playback.stop();
-    playback = undefined;
+    instance.set(undefined);
   }
 }
+
+export const useMidiPlaybackState = makeUseOf(instance);

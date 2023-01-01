@@ -39,7 +39,6 @@ function App() {
       }}>
       <div style={{position: 'absolute'}}>
         <Controls tempo={tempo} />
-        <pre>{JSON.stringify(notesOn)}</pre>
       </div>
       <PianoRoll notesOn={notesOn} timeline={notes} keys={88} shift={-39} leadMs={6000} pastMs={1500} />
     </div>

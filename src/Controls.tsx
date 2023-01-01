@@ -1,4 +1,4 @@
-import { toggleMidiOut } from "./midiPlayback";
+import { toggleMidiOut, useMidiPlaybackState } from "./midiPlayback";
 import { controlPlayback, usePlaybackTime } from "./playbackState";
 
 type TimeDisplayProps = {
@@ -8,6 +8,7 @@ export function Controls({tempo}: TimeDisplayProps) {
   const timeMs = usePlaybackTime()
   const timeMinutes = (timeMs / 60000)
   const timeBeats = timeMinutes * tempo;
+  const midiPlaybackState = useMidiPlaybackState();
 
   return (
     <div
@@ -43,6 +44,9 @@ export function Controls({tempo}: TimeDisplayProps) {
         <button
           onClick={() => {
             toggleMidiOut();
+          }}
+          style={{
+            color: midiPlaybackState ? 'blue' : 'black'
           }}>
           {'🕪'}
         </button>

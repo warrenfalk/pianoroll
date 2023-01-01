@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useDimensions } from "./dimensions";
 import { range } from "./iterables";
 import { NoteOnInfo } from "./midi";
-import { subscribePlaybackTime, usePlaybackTime } from "./playbackState";
+import { observePlaybackTime, usePlaybackTime } from "./playbackState";
 import { NoteEvent } from "./timelineData";
 
 
@@ -211,7 +211,7 @@ export function PianoRoll({timeline = [], notesOn = [], keys = 88, leadMs = 2750
   const ar = (dimensions ? (dimensions.width / dimensions.height) : 1) * heightSeconds / keys;
   const gRef = useRef<SVGGraphicsElement>(null);
   useEffect(() => {
-    const unsub = subscribePlaybackTime(time => {
+    const unsub = observePlaybackTime(time => {
       const g = gRef.current;
       if (g)
         g.style.transform = `translate(${-shift}px, ${time / 1000}px)`;

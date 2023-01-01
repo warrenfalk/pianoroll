@@ -1,5 +1,6 @@
 import * as midiManager from 'midi-file';
 import { useEffect, useState } from 'react';
+import { createObservable } from './observable';
 
 export type NoteEvent = {
   // the note number (middle c (C4) is 0)
@@ -63,29 +64,11 @@ export async function fileToNotes(file: File): Promise<readonly NoteEvent[]> {
   return output;
 }
 
-const timelineEventsObservable = (() => {
-  type Observer = (timeline: readonly NoteEvent[]) => void
-  type Unobserve = () => void
+const timelineEventsObservable = createObservable<readonly NoteEvent[]>([]);
 
-  let timelineEvents: readonly NoteEvent[] = [];
-  let observers: readonly Observer[] = [];
-  function observe(observer: Observer): Unobserve {
-    observers = [...observers, observer];
-    return () => {
-      observers = observers.filter(o => o !== observer);
-    }
-  }
-  function set(timeline: readonly NoteEvent[]) {
-    timelineEvents = timeline;
-    for (const o of observers) {
-      o(timelineEvents);
-    }
-  }
-  return {
-    observe,
-    set,
-  }
-})()
+export function observeTimelineEvents(observer: (timeline: readonly NoteEvent[]) => void) {
+  return timelineEventsObservable.observe(observer);
+}
 
 export function setTimelineEvents(timeline: readonly NoteEvent[]) {
   timelineEventsObservable.set(timeline);

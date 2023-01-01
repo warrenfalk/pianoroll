@@ -135,10 +135,9 @@ export function useMidiKeysDown(device: MIDIInput | undefined) {
 }
 
 
-export async function playMidi(toPlay: { note: number; start: number; length: number; velocity: number; }[]) {
-    const device = await openFirstOutput(/Lexicon/);
+export function playMidi(output: MIDIOutput, toPlay: { note: number; start: number; length: number; velocity: number; }[]) {
     for (const note of toPlay) {
-      device?.send([0x90, note.note, note.velocity], note.start);
-      device?.send([0x80, note.note, note.velocity], note.start + note.length);
+      output.send([0x90, note.note, note.velocity], note.start);
+      output.send([0x80, note.note, note.velocity], note.start + note.length);
     }
 }

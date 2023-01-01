@@ -1,6 +1,5 @@
-import { playMidi } from "./midi";
-import { controlPlayback, getPlaybackTime, usePlaybackTime } from "./playbackState";
-import { useTimelineEvents } from "./timelineData";
+import { toggleMidiOut } from "./midiPlayback";
+import { controlPlayback, usePlaybackTime } from "./playbackState";
 
 type TimeDisplayProps = {
   tempo: number,
@@ -9,7 +8,6 @@ export function Controls({tempo}: TimeDisplayProps) {
   const timeMs = usePlaybackTime()
   const timeMinutes = (timeMs / 60000)
   const timeBeats = timeMinutes * tempo;
-  const notes = useTimelineEvents();
 
   return (
     <div
@@ -44,19 +42,7 @@ export function Controls({tempo}: TimeDisplayProps) {
         </button>
         <button
           onClick={() => {
-            const now = performance.now();
-            const time = getPlaybackTime() - 6000;
-            const window = 8000;
-            console.log(time, now);
-            const toPlay = notes
-              .filter(n => ((n.startMs > time) && (n.startMs < (time + window))) || (n.startMs < time && (n.startMs + n.lengthMs) > time))
-              .map(n => ({
-                note: n.note + 60,
-                start: (n.startMs - time) + now,
-                length: n.lengthMs,
-                velocity: n.velocity
-              }));
-            playMidi(toPlay);
+            toggleMidiOut();
           }}>
           {'🕪'}
         </button>

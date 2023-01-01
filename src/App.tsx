@@ -2,13 +2,13 @@ import './App.css'
 import {PianoRoll} from './PianoRoll';
 import { Controls } from './Controls';
 import { openFirstDevice, test, useAsync, useMidiKeysDown } from './midi';
-import { fileToNotes, useNoteEvents } from './timelineData';
+import { fileToNotes, setTimelineEvents, useTimelineEvents } from './timelineData';
 
 
 const tempo = 144;
 
 function App() {
-  const [notes, setNotes] = useNoteEvents();
+  const notes = useTimelineEvents();
   const midi = useAsync(() => openFirstDevice(/Lexicon/));
   const notesOn = useMidiKeysDown(midi);
 
@@ -17,7 +17,7 @@ function App() {
       className="App"
       style={{display: 'flex', flexDirection: 'column', flexGrow: 1, placeItems: 'stretch'}}
       onClick={() => {
-        test().then(() => {}).catch(e => console.error(e));
+        //test().then(() => {}).catch(e => console.error(e));
       }}
       onDrop={(e) => {
         if (e.dataTransfer.items.length > 0 && e.dataTransfer.items[0].type === 'audio/midi') {
@@ -27,7 +27,7 @@ function App() {
             return;
           }
           fileToNotes(file)
-            .then(notes => setNotes(notes))
+            .then(notes => setTimelineEvents(notes))
             .catch(e => console.error(e));
           
           console.log(file);

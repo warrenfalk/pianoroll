@@ -75,6 +75,17 @@ export async function openFirstDevice(namePattern: RegExp): Promise<MIDIInput | 
   return undefined;
 }
 
+export async function openFirstOutput(namePattern: RegExp): Promise<MIDIOutput | undefined> {
+  const midi = await navigator.requestMIDIAccess();
+  for (const [_, output] of midi.outputs) {
+    if (namePattern.test(output.name)) {
+      await output.open();
+      return output;
+    }
+  }
+  return undefined;
+}
+
 export function useAsync<T>(asyncFunc: () => Promise<T>) {
   const [result, setResult] = useState<T>();
   useEffect(() => {
@@ -121,4 +132,13 @@ export function useMidiKeysDown(device: MIDIInput | undefined) {
     }
   }, [device])
   return keysDown;
+}
+
+
+export async function playMidi(toPlay: { note: number; start: number; length: number; velocity: number; }[]) {
+    const device = await openFirstOutput(/Lexicon/);
+    for (const note of toPlay) {
+      device?.send([0x90, note.note, note.velocity], note.start);
+      device?.send([0x80, note.note, note.velocity], note.start + note.length);
+    }
 }

@@ -62,6 +62,10 @@ export function usePlaybackTime(resolutionMs: number = 50) {
   return time;
 }
 
+export function getPlaybackTime() {
+  return playbackTime;
+}
+
 export function controlPlayback(event: ControlEvent) {
   switch (event.event) {
     case "play": {

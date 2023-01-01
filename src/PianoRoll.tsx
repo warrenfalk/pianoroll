@@ -1,16 +1,30 @@
+import assertNever from "assert-never";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useDimensions } from "./dimensions";
 import { range } from "./iterables";
 import { NoteOnInfo } from "./midi";
 import { observePlaybackTime, usePlaybackTime } from "./playbackState";
-import { beatToMs, isNote, NoteEvent, TempoEvent, TimelineEvent } from "./timelineData";
+import { beatToMs, TimelineEvent } from "./timelineData";
+
+type TimelineItem = Note | Bar;
 
 type Note = {
+  type: "note",
   note: number,
-  startMs: number,
+  timeMs: number,
   endMs: number,
   hand: number,
 }
+
+type Bar = {
+  type: "bar",
+  timeMs: number,
+  level: number,
+  number: number,
+}
+
+function isNote(item: TimelineItem): item is Note { return item.type === "note" };
+function isBar(item: TimelineItem): item is Bar { return item.type === "bar" };
 
 export function noteNum(note: number) {
   return ((note % 12) + 12) % 12
@@ -50,24 +64,24 @@ export function noteName(note: number) {
   return noteNames[n];
 }
 
-type MeasureGridProps = {
-
+type BarsProps = {
+  bars: readonly Bar[],
+  ar: number,
 }
-function MeasureGridProps({}: MeasureGridProps) {
+function Bars({bars, ar}: BarsProps) {
   return (
-    <g>
-      {/*
-      {events.filter(isTempo).map(({startMs, beatsPerMinute}) => (
+    <g id="bars">
+      {bars.map(({timeMs, level, number}) => (
         <>
-          <line x1={-39} x2={88} y1={startMs} y2={startMs} style={{opacity: 0.3, stroke: 'black', strokeWidth: '1', vectorEffect: 'non-scaling-stroke'}} />
-          <g>
-            <text x={-39 + 0.5} y={startMs - (3 * ar)} style={{fontSize: 0.8}} transform={`scale(1, ${ar})`}>
-              {`${beatsPerMinute} bpm`}
+          <line key={timeMs} x1={-39} x2={88} y1={timeMs * -0.001} y2={timeMs * -0.001} style={{opacity: 0.5 / ((level * 3) + 1), stroke: 'black', strokeWidth: '1', vectorEffect: 'non-scaling-stroke'}} />
+          {level === 0
+          ? (
+            <text x={-39 + 0.5} y={0} style={{fontSize: 0.8}} transform={`translate(0, ${(timeMs * -0.001) - (0.5 * ar)}) scale(1, 0.13)`}>
+              {number}
             </text>
-          </g>
+          ) : null}
         </>
       ))}
-      */}
     </g>
   )
 }
@@ -125,20 +139,20 @@ function NoteEvents({notes, ar}: NoteEventsProps) {
 
 
       </defs>
-      {notes.map(({note, endMs, startMs, hand}) => (
+      {notes.map(({note, endMs, timeMs, hand}) => (
         <>
           <rect
-            key={`${startMs}-note-${note}`}
+            key={`${timeMs}-note-${note}`}
             style={{fill: `url(#hand${hand})`, stroke: 'black', strokeWidth: '1', vectorEffect: 'non-scaling-stroke'}}
             //style="color:#000000;overflow:visible;fill:#0167f9;stroke-width:3.02362;stroke-linejoin:round"
             width={noteWidth(note)}
-            height={(endMs - startMs) * 0.001}
+            height={(endMs - timeMs) * 0.001}
             x={noteX(note)}
             y={-(endMs * 0.001)}
             rx={0.3}
             ry={0.3 * ar}
           />
-          <use href={`#note${noteNum(note)}`} transform={`translate(${note + 0.5}, ${-(startMs * 0.001) - (0.3 * ar)}) scale(1, ${ar})`} />
+          <use href={`#note${noteNum(note)}`} transform={`translate(${note + 0.5}, ${-(timeMs * 0.001) - (0.3 * ar)}) scale(1, ${ar})`} />
         </>
       ))}
     </g>
@@ -234,8 +248,8 @@ function NotesOn({notesOn}: NotesOnProps) {
   )
 }
 
-function filterVisible(timeline: readonly Note[], maxMs: number, minMs: number): readonly Note[] {
-  return timeline.filter(e => !(e.startMs >= maxMs || (e.endMs) < minMs));
+function filterVisible(timeline: readonly TimelineItem[], maxMs: number, minMs: number): readonly TimelineItem[] {
+  return timeline.filter(e => !(e.timeMs >= maxMs || ("endMs" in e ? e.endMs : e.timeMs) < minMs));
 }
 
 type PianoRollProps = {
@@ -259,8 +273,8 @@ export function PianoRoll({timeline = [], notesOn = [], keys = 88, leadMs = 2750
   const bottomEdgeMs = time - pastMs;
   // this is the earliest edge (padded by 2 seconds)
   const topEdgeMs = time + leadMs + 2000;
-  const disp = processTimeline(timeline);
-  const visible = filterVisible(disp, topEdgeMs, bottomEdgeMs);
+  const items = toTimelineItems(timeline);
+  const visible = filterVisible(items, topEdgeMs, bottomEdgeMs);
 
   const heightMs = (leadMs + pastMs);
   const heightSeconds = heightMs * 0.001;
@@ -281,7 +295,8 @@ export function PianoRoll({timeline = [], notesOn = [], keys = 88, leadMs = 2750
       <g
         id="time"
         ref={gRef}>
-        <NoteEvents notes={visible} ar={ar} />
+        <NoteEvents notes={visible.filter(isNote)} ar={ar} />
+        <Bars bars={visible.filter(isBar)} ar={ar} />
       </g>
       <g
         transform={`translate(0, ${leadMs * 0.001}) scale(${keys}, ${pastMs * 0.001})`}>
@@ -294,11 +309,55 @@ export function PianoRoll({timeline = [], notesOn = [], keys = 88, leadMs = 2750
   )
 }
 
-function processTimeline(timeline: readonly TimelineEvent[]): readonly Note[] {
-  return timeline.filter(isNote).map<Note>(e => ({
-    note: e.note,
-    startMs: beatToMs(e.startBeat, 120, 0, 0),
-    endMs: beatToMs(e.endBeat, 120, 0, 0),
-    hand: e.hand,
-  }));
+function toTimelineItems(timeline: readonly TimelineEvent[]): readonly TimelineItem[] {
+  const output = [] as TimelineItem[];
+  let bpm = 120;
+  let bpmStartMs = 0;
+  let bpmStartBeat = 0;
+  let lastBar = 0;
+  let meter = 4;
+  for (const e of timeline) {
+    const endBeat = ("endBeat" in e ? e.endBeat : e.startBeat);
+    const timeMs = beatToMs(e.startBeat, bpm, bpmStartMs, bpmStartBeat);
+    const endMs = beatToMs(endBeat, bpm, bpmStartMs, bpmStartBeat);
+    
+    // insert all of the "bar" items up to endBeat
+    for (let bar = lastBar + 1; (bar + 1) <= endBeat; bar++) {
+      output.push({
+        type: "bar",
+        level: ((bar - bpmStartBeat) % meter) === 0 ? 0 : 1,
+        timeMs: beatToMs(bar, bpm, bpmStartMs, bpmStartBeat),
+        number: Math.floor(bar / meter),
+      })
+      lastBar = bar;
+    }
+    
+    switch (e.type) {
+      case "note": {
+        output.push({
+          type: "note",
+          note: e.note,
+          timeMs,
+          endMs,
+          hand: e.hand,
+        });
+        break;
+      }
+      case "meter": {
+        break;
+      }
+      case "tempo": {
+        bpm = e.beatsPerMinute;
+        bpmStartMs = timeMs;
+        bpmStartBeat = e.startBeat;
+        break;
+      }
+      default: {
+        assertNever(e);
+      }
+    }
+  }
+  return output;
 }
+
+

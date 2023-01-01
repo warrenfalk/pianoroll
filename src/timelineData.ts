@@ -2,7 +2,10 @@ import * as midiManager from 'midi-file';
 import { useEffect, useState } from 'react';
 import { createObservable } from './observable';
 
+export type TimelineEvent = NoteEvent | TempoEvent | MeterEvent
+
 export type NoteEvent = {
+  type: "note",
   // the note number (middle c (C4) is 0)
   note: number,
   // start time in milliseconds
@@ -15,7 +18,23 @@ export type NoteEvent = {
   velocity: number,
 }
 
-export async function fileToNotes(file: File): Promise<readonly NoteEvent[]> {
+export type TempoEvent = {
+  type: "tempo",
+  startMs: number,
+  beatsPerMinute: number,
+}
+
+export type MeterEvent = {
+  type: "meter",
+  startMs: number,
+  beatsPerMeasure: number,
+}
+
+export function isNote(e: TimelineEvent): e is NoteEvent { return e.type === "note" }
+export function isTempo(e: TimelineEvent): e is TempoEvent { return e.type === "tempo" }
+export function isMeter(e: TimelineEvent): e is MeterEvent { return e.type === "meter" }
+
+export async function fileToNotes(file: File): Promise<readonly TimelineEvent[]> {
   type NoteStartInfo = {
     start: number,
     velocity: number,
@@ -27,7 +46,7 @@ export async function fileToNotes(file: File): Promise<readonly NoteEvent[]> {
     throw new Error("No tracks");
   }
   const track = parsed.tracks[0];
-  const output: NoteEvent[] = [];
+  const output: TimelineEvent[] = [{type: "tempo", startMs: 0, beatsPerMinute: 120}];
   let now = 0;
   const notesOn = new Map<string, NoteStartInfo>();
   // to process a list of midi events, you have to loop through it and keep track of certain state
@@ -48,6 +67,7 @@ export async function fileToNotes(file: File): Promise<readonly NoteEvent[]> {
         // 38400 per second
         if (note) {
           output.push({
+            type: "note",
             startMs: note.start / 38.4,
             lengthMs: (now - note.start) / 38.4,
             hand: 0,
@@ -60,22 +80,23 @@ export async function fileToNotes(file: File): Promise<readonly NoteEvent[]> {
       }
     }
   }
+  output.sort((a,b) => a.startMs - b.startMs);
   console.log(parsed.tracks[0]);
   return output;
 }
 
-const timelineEventsObservable = createObservable<readonly NoteEvent[]>([]);
+const timelineEventsObservable = createObservable<readonly TimelineEvent[]>([]);
 
-export function observeTimelineEvents(observer: (timeline: readonly NoteEvent[]) => void) {
+export function observeTimelineEvents(observer: (timeline: readonly TimelineEvent[]) => void) {
   return timelineEventsObservable.observe(observer);
 }
 
-export function setTimelineEvents(timeline: readonly NoteEvent[]) {
+export function setTimelineEvents(timeline: readonly TimelineEvent[]) {
   timelineEventsObservable.set(timeline);
 }
 
-export function useTimelineEvents(): readonly NoteEvent[] {
-  const [notes, setNotes] = useState<readonly NoteEvent[]>([]);
+export function useTimelineEvents(): readonly TimelineEvent[] {
+  const [notes, setNotes] = useState<readonly TimelineEvent[]>([]);
   useEffect(() => {
     return timelineEventsObservable.observe(next => {
       setNotes(next);

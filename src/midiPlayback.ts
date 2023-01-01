@@ -1,7 +1,7 @@
 import { openFirstOutput, playMidi } from "./midi";
 import { createObservable, makeUseOf } from "./observable";
 import { observePlaybackState, observePlaybackTime } from "./playbackState";
-import { NoteEvent, observeTimelineEvents } from "./timelineData";
+import { isNote, NoteEvent, observeTimelineEvents, TimelineEvent } from "./timelineData";
 
 type PlaybackInstance = {
   stop: () => void,
@@ -39,7 +39,7 @@ function startPlayback(lookaheadMs: number = 500): PlaybackInstance {
   })
 
   let dispose2 = observeTimelineEvents(nextTimeline => {
-    timeline = nextTimeline;
+    timeline = nextTimeline.filter(isNote);
     sync();
   })
 

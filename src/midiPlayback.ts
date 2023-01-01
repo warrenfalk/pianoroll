@@ -1,10 +1,17 @@
 import { openFirstOutput, playMidi } from "./midi";
 import { createObservable, makeUseOf } from "./observable";
 import { observePlaybackState, observePlaybackTime } from "./playbackState";
-import { isNote, NoteEvent, observeTimelineEvents, TimelineEvent } from "./timelineData";
+import { beatToMs, isNote, NoteEvent, observeTimelineEvents, TimelineEvent } from "./timelineData";
 
 type PlaybackInstance = {
   stop: () => void,
+}
+
+type NoteOnOffEvent = {
+  startMs: number,
+  endMs: number,
+  midiNote: number,
+  velocity: number,
 }
 
 const instance = createObservable<PlaybackInstance | undefined>(undefined);
@@ -12,11 +19,20 @@ const instance = createObservable<PlaybackInstance | undefined>(undefined);
 const g = (window as any);
 g.midiPlayback = import.meta;
 
+function toNoteOnOffEvents(nextTimeline: readonly TimelineEvent[]): readonly NoteOnOffEvent[] {
+  return nextTimeline.filter(isNote).map(n => ({
+    midiNote: n.note + 60,
+    velocity: n.velocity,
+    startMs: beatToMs(n.startBeat, 120, 0, 0),
+    endMs: beatToMs(n.endBeat, 120, 0, 0),
+  }))
+}
+
 function startPlayback(lookaheadMs: number = 500): PlaybackInstance {
   let prev: DOMHighResTimeStamp | false = false;
   let time: DOMHighResTimeStamp = 0;
   let playing: boolean = false;
-  let timeline: readonly NoteEvent[] = [];
+  let timeline: readonly NoteOnOffEvent[] = [];
   let midi: MIDIOutput | undefined = undefined;
 
   openFirstOutput(/Lexicon/)
@@ -39,7 +55,7 @@ function startPlayback(lookaheadMs: number = 500): PlaybackInstance {
   })
 
   let dispose2 = observeTimelineEvents(nextTimeline => {
-    timeline = nextTimeline.filter(isNote);
+    timeline = toNoteOnOffEvents(nextTimeline);
     sync();
   })
 
@@ -61,14 +77,14 @@ function startPlayback(lookaheadMs: number = 500): PlaybackInstance {
     const toPlay = timeline
       .filter(n => (
         (  (n.startMs >= windowMin && n.startMs < windowMax) // note starts within this time window
-        || (prev === false && n.startMs < windowMin && (n.startMs + n.lengthMs) > windowMin) // or starts before it and ends after it and this is the first iteration
+        || (prev === false && n.startMs < windowMin && (n.endMs) > windowMin) // or starts before it and ends after it and this is the first iteration
         ) 
         && (prev === false || n.startMs >= prev) // and we haven't already enqueued it
       ))
       .map(n => ({
-        note: n.note + 60,
+        note: n.midiNote,
         start: (n.startMs - time) + now,
-        length: n.lengthMs,
+        length: (n.endMs - n.startMs),
         velocity: n.velocity
       }));
     if (prev === 0) {
@@ -124,3 +140,4 @@ export function disableMidiOut() {
 }
 
 export const useMidiPlaybackState = makeUseOf(instance);
+

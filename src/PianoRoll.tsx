@@ -3,8 +3,14 @@ import { useDimensions } from "./dimensions";
 import { range } from "./iterables";
 import { NoteOnInfo } from "./midi";
 import { observePlaybackTime, usePlaybackTime } from "./playbackState";
-import { isNote, NoteEvent, TempoEvent, TimelineEvent } from "./timelineData";
+import { beatToMs, isNote, NoteEvent, TempoEvent, TimelineEvent } from "./timelineData";
 
+type Note = {
+  note: number,
+  startMs: number,
+  endMs: number,
+  hand: number,
+}
 
 export function noteNum(note: number) {
   return ((note % 12) + 12) % 12
@@ -67,7 +73,7 @@ function MeasureGridProps({}: MeasureGridProps) {
 }
 
 type NoteEventsProps = {
-  notes: readonly NoteEvent[],
+  notes: readonly Note[],
   // adjustment for a y coordinate to make 1:1 aspect with x coordinate space
   ar: number,
 }
@@ -119,16 +125,16 @@ function NoteEvents({notes, ar}: NoteEventsProps) {
 
 
       </defs>
-      {notes.map(({note, lengthMs, startMs, hand}) => (
+      {notes.map(({note, endMs, startMs, hand}) => (
         <>
           <rect
             key={`${startMs}-note-${note}`}
             style={{fill: `url(#hand${hand})`, stroke: 'black', strokeWidth: '1', vectorEffect: 'non-scaling-stroke'}}
             //style="color:#000000;overflow:visible;fill:#0167f9;stroke-width:3.02362;stroke-linejoin:round"
             width={noteWidth(note)}
-            height={lengthMs * 0.001}
+            height={(endMs - startMs) * 0.001}
             x={noteX(note)}
-            y={-((startMs + lengthMs) * 0.001)}
+            y={-(endMs * 0.001)}
             rx={0.3}
             ry={0.3 * ar}
           />
@@ -228,8 +234,8 @@ function NotesOn({notesOn}: NotesOnProps) {
   )
 }
 
-function filterVisible(timeline: readonly TimelineEvent[], maxMs: number, minMs: number): readonly TimelineEvent[] {
-  return timeline.filter(e => !(e.startMs >= maxMs || (e.startMs + ("lengthMs" in e ? e.lengthMs : 0)) < minMs));
+function filterVisible(timeline: readonly Note[], maxMs: number, minMs: number): readonly Note[] {
+  return timeline.filter(e => !(e.startMs >= maxMs || (e.endMs) < minMs));
 }
 
 type PianoRollProps = {
@@ -253,7 +259,8 @@ export function PianoRoll({timeline = [], notesOn = [], keys = 88, leadMs = 2750
   const bottomEdgeMs = time - pastMs;
   // this is the earliest edge (padded by 2 seconds)
   const topEdgeMs = time + leadMs + 2000;
-  const visible = filterVisible(timeline, topEdgeMs, bottomEdgeMs);
+  const disp = processTimeline(timeline);
+  const visible = filterVisible(disp, topEdgeMs, bottomEdgeMs);
 
   const heightMs = (leadMs + pastMs);
   const heightSeconds = heightMs * 0.001;
@@ -274,7 +281,7 @@ export function PianoRoll({timeline = [], notesOn = [], keys = 88, leadMs = 2750
       <g
         id="time"
         ref={gRef}>
-        <NoteEvents notes={visible.filter(isNote)} ar={ar} />
+        <NoteEvents notes={visible} ar={ar} />
       </g>
       <g
         transform={`translate(0, ${leadMs * 0.001}) scale(${keys}, ${pastMs * 0.001})`}>
@@ -285,4 +292,13 @@ export function PianoRoll({timeline = [], notesOn = [], keys = 88, leadMs = 2750
       </g>
     </svg>
   )
+}
+
+function processTimeline(timeline: readonly TimelineEvent[]): readonly Note[] {
+  return timeline.filter(isNote).map<Note>(e => ({
+    note: e.note,
+    startMs: beatToMs(e.startBeat, 120, 0, 0),
+    endMs: beatToMs(e.endBeat, 120, 0, 0),
+    hand: e.hand,
+  }));
 }

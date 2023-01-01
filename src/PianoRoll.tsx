@@ -201,9 +201,9 @@ export function PianoRoll({timeline = [], notesOn = [], keys = 88, leadMs = 2750
 
   // Filter only the visible notes for performance
   // this is the latest edge
-  const bottomEdgeMs = time - (leadMs + pastMs);
+  const bottomEdgeMs = time - pastMs;
   // this is the earliest edge (padded by 2 seconds)
-  const topEdgeMs = time + 2000;
+  const topEdgeMs = time + leadMs + 2000;
   const visible = filterVisible(timeline, topEdgeMs, bottomEdgeMs);
 
   const heightMs = (leadMs + pastMs);
@@ -214,7 +214,7 @@ export function PianoRoll({timeline = [], notesOn = [], keys = 88, leadMs = 2750
     const unsub = observePlaybackTime(time => {
       const g = gRef.current;
       if (g)
-        g.style.transform = `translate(${-shift}px, ${time / 1000}px)`;
+        g.style.transform = `translate(${-shift}px, ${(time + leadMs) / 1000}px)`;
     });
     return unsub;
   }, [])

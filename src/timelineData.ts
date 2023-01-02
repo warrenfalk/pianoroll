@@ -61,7 +61,7 @@ export async function fileToNotes(file: File): Promise<readonly TimelineEvent[]>
     throw new Error("No tracks");
   }
   const track = parsed.tracks[0];
-  const output: TimelineEvent[] = [{type: "tempo", startBeat: 0, beatsPerMinute: 120}];
+  let output: TimelineEvent[] = [{type: "tempo", startBeat: 0, beatsPerMinute: 120}];
   let now = 0;
   const notesOn = new Map<string, NoteStartInfo>();
   let tempo: TempoInfo = {
@@ -104,6 +104,12 @@ export async function fileToNotes(file: File): Promise<readonly TimelineEvent[]>
   }
   output.sort((a,b) => a.startBeat - b.startBeat);
   output[0] = {...output[0] as TempoEvent, beatsPerMinute: 156}
+
+  output = [...output.slice(0, 311), {type: "tempo", beatsPerMinute: 117, startBeat: 200}, ...output.slice(311)];
+  output = [...output.slice(0, 312), {type: "meter", beatsPerMeasure: 3, startBeat: 200}, ...output.slice(312)];
+  output = [...output.slice(0, 325), {type: "tempo", beatsPerMinute: 156, startBeat: 203}, ...output.slice(325)];
+  output = [...output.slice(0, 326), {type: "meter", beatsPerMeasure: 4, startBeat: 203}, ...output.slice(326)];
+
   console.log(output);
   return output;
 }

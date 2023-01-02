@@ -6,7 +6,7 @@ import { NoteOnInfo } from "./midi";
 import { observePlaybackTime, usePlaybackTime } from "./playbackState";
 import { beatToMs, TempoInfo, TimelineEvent } from "./timelineData";
 
-type TimelineItem = Note | Bar;
+type TimelineItem = Note | Beat | TempoChange | MeterChange;
 
 type Note = {
   type: "note",
@@ -16,15 +16,30 @@ type Note = {
   hand: number,
 }
 
-type Bar = {
-  type: "bar",
+type Beat = {
+  type: "beat",
   timeMs: number,
-  level: number,
+  measure: number,
+  beatNumber: number,
   number: number,
 }
 
+type TempoChange = {
+  type: "tempo",
+  tempo: number,
+  prev: number,
+  timeMs: number,
+}
+
+type MeterChange = {
+  type: "meter",
+  meter: number,
+  prev: number,
+  timeMs: number,
+}
+
 function isNote(item: TimelineItem): item is Note { return item.type === "note" };
-function isBar(item: TimelineItem): item is Bar { return item.type === "bar" };
+function isBeat(item: TimelineItem): item is Beat { return item.type === "beat" };
 
 export function noteNum(note: number) {
   return ((note % 12) + 12) % 12
@@ -65,19 +80,19 @@ export function noteName(note: number) {
 }
 
 type BarsProps = {
-  bars: readonly Bar[],
+  beats: readonly Beat[],
   ar: number,
 }
-function Bars({bars, ar}: BarsProps) {
+function Bars({beats, ar}: BarsProps) {
   return (
     <g id="bars">
-      {bars.map(({timeMs, level, number}) => (
+      {beats.map(({timeMs, measure, beatNumber, number}) => (
         <>
-          <line key={`bar${timeMs}`} x1={-39} x2={88} y1={timeMs * -0.001} y2={timeMs * -0.001} style={{opacity: 0.5 / ((level * 3) + 1), stroke: 'black', strokeWidth: '1', vectorEffect: 'non-scaling-stroke'}} />
-          {level === 0
+          <line key={`beat${timeMs}`} x1={-39} x2={88} y1={timeMs * -0.001} y2={timeMs * -0.001} style={{opacity: beatNumber ? 0.15 : 0.6, stroke: 'black', strokeWidth: '1', vectorEffect: 'non-scaling-stroke'}} />
+          {beatNumber === 0
           ? (
             <text key={`lbl${timeMs}`} x={-39 + 0.5} y={0} style={{fontSize: 0.8}} transform={`translate(0, ${(timeMs * -0.001) - (0.5 * ar)}) scale(1, 0.13)`}>
-              {number}
+              {measure}
             </text>
           ) : null}
         </>
@@ -301,7 +316,7 @@ export function PianoRoll({timeline = [], notesOn = [], keys = 88, leadMs = 2750
         id="time"
         ref={gRef}>
         <NoteEvents notes={visible.filter(isNote)} ar={ar} />
-        <Bars bars={visible.filter(isBar)} ar={ar} />
+        <Bars beats={visible.filter(isBeat)} ar={ar} />
       </g>
       <g
         transform={`translate(0, ${leadMs * 0.001}) scale(${keys}, ${pastMs * 0.001})`}>
@@ -321,22 +336,41 @@ function toTimelineItems(timeline: readonly TimelineEvent[]): readonly TimelineI
     startBeat: 0,
     startMs: 0,
   }
-  let lastBar = 0;
-  let meter = 4;
+  let lastBeatMs = 0;
+  let lastBeat = 0;
+  let beatsPerMeasure = 4;
+  let meterStartBeat = 0;
+  let measure = 1;
+
+  output.push({
+    type: "beat",
+    measure: 1,
+    beatNumber: 0,
+    number: 0,
+    timeMs: 0,
+  });
+
   for (const e of timeline) {
     const endBeat = ("endBeat" in e ? e.endBeat : e.startBeat);
     const timeMs = beatToMs(e.startBeat, tempo);
     const endMs = beatToMs(endBeat, tempo);
-    
-    // insert all of the "bar" items up to endBeat
-    for (let bar = lastBar + 1; (bar + 1) <= endBeat; bar++) {
+
+    while (e.startBeat >= (lastBeat + 1)) {
+      const nextBeat = lastBeat + 1;
+      const nextBeatMs = lastBeat > tempo.startBeat
+        ? beatToMs(nextBeat, {beatsPerMinute: tempo.beatsPerMinute, startBeat: lastBeat, startMs: lastBeatMs})
+        : beatToMs(nextBeat, tempo)
+      const beatNumber = (nextBeat - meterStartBeat) % beatsPerMeasure;
+      measure = beatNumber === 0 ? measure + 1 : measure;
       output.push({
-        type: "bar",
-        level: ((bar - tempo.startBeat) % meter) === 0 ? 0 : 1,
-        timeMs: beatToMs(bar, tempo),
-        number: Math.floor(bar / meter),
-      })
-      lastBar = bar;
+        type: "beat",
+        measure,
+        beatNumber,
+        number: nextBeat,
+        timeMs: nextBeatMs,
+      });
+      lastBeat = nextBeat
+      lastBeatMs = nextBeatMs;
     }
     
     switch (e.type) {
@@ -351,9 +385,23 @@ function toTimelineItems(timeline: readonly TimelineEvent[]): readonly TimelineI
         break;
       }
       case "meter": {
+        output.push({
+          type: "meter",
+          meter: e.beatsPerMeasure,
+          prev: beatsPerMeasure,
+          timeMs,
+        })
+        beatsPerMeasure = e.beatsPerMeasure;
+        meterStartBeat = e.startBeat;
         break;
       }
       case "tempo": {
+        output.push({
+          type: "tempo",
+          tempo: e.beatsPerMinute,
+          prev: tempo.beatsPerMinute,
+          timeMs,
+        });
         tempo = {
           ...e,
           startMs: timeMs

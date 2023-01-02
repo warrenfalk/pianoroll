@@ -1,7 +1,7 @@
 import { openFirstOutput, playMidi } from "./midi";
 import { createObservable, makeUseOf } from "./observable";
 import { observePlaybackState, observePlaybackTime } from "./playbackState";
-import { beatToMs, isNote, NoteEvent, observeTimelineEvents, TimelineEvent } from "./timelineData";
+import { beatToMs, isNote, isTempo, NoteEvent, observeTimelineEvents, TempoEvent, TimelineEvent } from "./timelineData";
 
 type PlaybackInstance = {
   stop: () => void,
@@ -20,12 +20,30 @@ const g = (window as any);
 g.midiPlayback = import.meta;
 
 function toNoteOnOffEvents(nextTimeline: readonly TimelineEvent[]): readonly NoteOnOffEvent[] {
-  return nextTimeline.filter(isNote).map(n => ({
-    midiNote: n.note + 60,
-    velocity: n.velocity,
-    startMs: beatToMs(n.startBeat, 120, 0, 0),
-    endMs: beatToMs(n.endBeat, 120, 0, 0),
-  }))
+  let tempo: TempoEvent & {startMs: number} = {
+    type: "tempo",
+    startBeat: 0,
+    startMs: 0,
+    beatsPerMinute: 120,
+  }
+  const output = [] as NoteOnOffEvent[]
+  for (const e of nextTimeline) {
+    if (isNote(e)) {
+      output.push({
+        midiNote: e.note + 60,
+        velocity: e.velocity,
+        startMs: beatToMs(e.startBeat, tempo),
+        endMs: beatToMs(e.endBeat, tempo),
+      })
+    }
+    else if (isTempo(e)) {
+      tempo = {
+        ...e,
+        startMs: beatToMs(e.startBeat, tempo),
+      }
+    }
+  }
+  return output;
 }
 
 function startPlayback(lookaheadMs: number = 500): PlaybackInstance {

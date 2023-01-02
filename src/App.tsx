@@ -8,7 +8,7 @@ import { fileToNotes, setTimelineEvents, useTimelineEvents } from './timelineDat
 const tempo = 144;
 
 function App() {
-  const notes = useTimelineEvents();
+  const timeline = useTimelineEvents();
   const midi = useAsync(() => openFirstDevice(/Lexicon/));
   const notesOn = useMidiKeysDown(midi);
 
@@ -40,7 +40,14 @@ function App() {
       <div style={{position: 'absolute'}}>
         <Controls tempo={tempo} />
       </div>
-      <PianoRoll notesOn={notesOn} timeline={notes} keys={88} shift={-39} leadMs={6000} pastMs={1500} />
+      <PianoRoll
+        notesOn={notesOn}
+        timeline={timeline}
+        keys={88}
+        shift={-39}
+        leadMs={7000}
+        pastMs={1500}
+      />
     </div>
   )
 }

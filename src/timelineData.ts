@@ -19,27 +19,34 @@ export type NoteEvent = {
 }
 
 export type TempoEvent = {
-  type: "tempo",
-  startBeat: number,
-  beatsPerMinute: number,
+  readonly type: "tempo",
+  readonly startBeat: number,
+  readonly beatsPerMinute: number,
 }
 
 export type MeterEvent = {
-  type: "meter",
-  startBeat: number,
-  beatsPerMeasure: number,
+  readonly type: "meter",
+  readonly startBeat: number,
+  readonly beatsPerMeasure: number,
 }
+
+export type TempoInfo = {
+  readonly startBeat: number,
+  readonly startMs: number,
+  readonly beatsPerMinute: number,
+}
+
 
 export function isNote(e: TimelineEvent): e is NoteEvent { return e.type === "note" }
 export function isTempo(e: TimelineEvent): e is TempoEvent { return e.type === "tempo" }
 export function isMeter(e: TimelineEvent): e is MeterEvent { return e.type === "meter" }
 
-export function msToBeat(ms: number, bpm: number, bpmStartMs: number, bpmStartBeat: number) {
-  return (((ms - bpmStartMs) / 60000) * bpm) + bpmStartBeat;
+export function msToBeat(ms: number, {beatsPerMinute, startBeat, startMs}: TempoInfo) {
+  return (((ms - startMs) / 60000) * beatsPerMinute) + startBeat;
 }
 
-export function beatToMs(beat: number, bpm: number, bpmStartMs: number, bpmStartBeat: number) {
-  return ((((beat - bpmStartBeat) / bpm) * 60000) + bpmStartMs);
+export function beatToMs(beat: number, {beatsPerMinute, startBeat, startMs}: TempoInfo) {
+  return ((((beat - startBeat) / beatsPerMinute) * 60000) + startMs);
 }
 
 export async function fileToNotes(file: File): Promise<readonly TimelineEvent[]> {
@@ -57,6 +64,11 @@ export async function fileToNotes(file: File): Promise<readonly TimelineEvent[]>
   const output: TimelineEvent[] = [{type: "tempo", startBeat: 0, beatsPerMinute: 120}];
   let now = 0;
   const notesOn = new Map<string, NoteStartInfo>();
+  let tempo: TempoInfo = {
+    beatsPerMinute: 120,
+    startBeat: 0,
+    startMs: 0,
+  }
   // to process a list of midi events, you have to loop through it and keep track of certain state
   for (const event of track) {
     now += event.deltaTime;
@@ -74,8 +86,8 @@ export async function fileToNotes(file: File): Promise<readonly TimelineEvent[]>
         // 19200 per quarter note = 1 beat 120 beats per minute 1/120 minutes per beat = 0.5 seconds per beat per 19200 units per beat 
         // 38400 per second
         if (note) {
-          const startBeat = msToBeat(note.start / 38.4, 120, 0, 0);
-          const endBeat = msToBeat(now / 38.4, 120, 0, 0);
+          const startBeat = msToBeat(note.start / 38.4, tempo);
+          const endBeat = msToBeat(now / 38.4, tempo);
           output.push({
             type: "note",
             startBeat,
@@ -91,6 +103,7 @@ export async function fileToNotes(file: File): Promise<readonly TimelineEvent[]>
     }
   }
   output.sort((a,b) => a.startBeat - b.startBeat);
+  output[0] = {...output[0] as TempoEvent, beatsPerMinute: 156}
   console.log(output);
   return output;
 }

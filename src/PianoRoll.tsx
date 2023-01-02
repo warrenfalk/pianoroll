@@ -1,10 +1,10 @@
 import assertNever from "assert-never";
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useDimensions } from "./dimensions";
 import { range } from "./iterables";
 import { NoteOnInfo } from "./midi";
 import { observePlaybackTime, usePlaybackTime } from "./playbackState";
-import { beatToMs, TimelineEvent } from "./timelineData";
+import { beatToMs, TempoInfo, TimelineEvent } from "./timelineData";
 
 type TimelineItem = Note | Bar;
 
@@ -73,10 +73,10 @@ function Bars({bars, ar}: BarsProps) {
     <g id="bars">
       {bars.map(({timeMs, level, number}) => (
         <>
-          <line key={timeMs} x1={-39} x2={88} y1={timeMs * -0.001} y2={timeMs * -0.001} style={{opacity: 0.5 / ((level * 3) + 1), stroke: 'black', strokeWidth: '1', vectorEffect: 'non-scaling-stroke'}} />
+          <line key={`bar${timeMs}`} x1={-39} x2={88} y1={timeMs * -0.001} y2={timeMs * -0.001} style={{opacity: 0.5 / ((level * 3) + 1), stroke: 'black', strokeWidth: '1', vectorEffect: 'non-scaling-stroke'}} />
           {level === 0
           ? (
-            <text x={-39 + 0.5} y={0} style={{fontSize: 0.8}} transform={`translate(0, ${(timeMs * -0.001) - (0.5 * ar)}) scale(1, 0.13)`}>
+            <text key={`lbl${timeMs}`} x={-39 + 0.5} y={0} style={{fontSize: 0.8}} transform={`translate(0, ${(timeMs * -0.001) - (0.5 * ar)}) scale(1, 0.13)`}>
               {number}
             </text>
           ) : null}
@@ -151,8 +151,13 @@ function NoteEvents({notes, ar}: NoteEventsProps) {
             y={-(endMs * 0.001)}
             rx={0.3}
             ry={0.3 * ar}
+            cursor={'pointer'}
           />
-          <use href={`#note${noteNum(note)}`} transform={`translate(${note + 0.5}, ${-(timeMs * 0.001) - (0.3 * ar)}) scale(1, ${ar})`} />
+          <use
+            key={`${timeMs}-lbl-${note}`}
+            href={`#note${noteNum(note)}`}
+            transform={`translate(${note + 0.5}, ${-(timeMs * 0.001) - (0.3 * ar)}) scale(1, ${ar})`}
+          />
         </>
       ))}
     </g>
@@ -311,22 +316,24 @@ export function PianoRoll({timeline = [], notesOn = [], keys = 88, leadMs = 2750
 
 function toTimelineItems(timeline: readonly TimelineEvent[]): readonly TimelineItem[] {
   const output = [] as TimelineItem[];
-  let bpm = 120;
-  let bpmStartMs = 0;
-  let bpmStartBeat = 0;
+  let tempo: TempoInfo = {
+    beatsPerMinute: 120,
+    startBeat: 0,
+    startMs: 0,
+  }
   let lastBar = 0;
   let meter = 4;
   for (const e of timeline) {
     const endBeat = ("endBeat" in e ? e.endBeat : e.startBeat);
-    const timeMs = beatToMs(e.startBeat, bpm, bpmStartMs, bpmStartBeat);
-    const endMs = beatToMs(endBeat, bpm, bpmStartMs, bpmStartBeat);
+    const timeMs = beatToMs(e.startBeat, tempo);
+    const endMs = beatToMs(endBeat, tempo);
     
     // insert all of the "bar" items up to endBeat
     for (let bar = lastBar + 1; (bar + 1) <= endBeat; bar++) {
       output.push({
         type: "bar",
-        level: ((bar - bpmStartBeat) % meter) === 0 ? 0 : 1,
-        timeMs: beatToMs(bar, bpm, bpmStartMs, bpmStartBeat),
+        level: ((bar - tempo.startBeat) % meter) === 0 ? 0 : 1,
+        timeMs: beatToMs(bar, tempo),
         number: Math.floor(bar / meter),
       })
       lastBar = bar;
@@ -347,9 +354,10 @@ function toTimelineItems(timeline: readonly TimelineEvent[]): readonly TimelineI
         break;
       }
       case "tempo": {
-        bpm = e.beatsPerMinute;
-        bpmStartMs = timeMs;
-        bpmStartBeat = e.startBeat;
+        tempo = {
+          ...e,
+          startMs: timeMs
+        }
         break;
       }
       default: {
